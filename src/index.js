@@ -26,13 +26,18 @@ async function downloadFiles(links) {
   const stat = {};
   const files = await getData(links);
 
+  console.log('Added files:');
+
   files.forEach((response) => {
     if (response.status === 200) {
       const url = new URL(response.config.url);
-      const fileName = path.basename(url.pathname, '.mp3');
-      stat[fileName] = (stat[fileName] !== undefined) ? stat[fileName] + 1 : 1;
+      const basename = path.basename(url.pathname, '.mp3');
+      stat[basename] = (stat[basename] !== undefined) ? stat[basename] + 1 : 1;
+      const filePath = `./data/${basename}${stat[basename]}.mp3`;
 
-      response.data.pipe(fs.createWriteStream(`./data/${fileName}${stat[fileName]}.mp3`));
+      response.data.pipe(fs.createWriteStream(filePath));
+
+      console.log(filePath);
     }
   });
 }
