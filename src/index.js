@@ -15,11 +15,7 @@ const config = {
 };
 
 async function getFile(url) {
-  return axios({
-    method: 'get',
-    url,
-    responseType: 'stream',
-  });
+  return axios({ url, responseType: 'stream' });
 }
 
 async function getData(links) {
@@ -74,11 +70,11 @@ async function run() {
 
     state.dictionary = new Set(data1.split('\n'));
     state.newWords = data2.split('\n').map((word) => word.trim());
-
-    downloadFiles(state);
   } catch (err) {
     console.log(err.message);
   }
+
+  downloadFiles(state);
 }
 
 export default run;
