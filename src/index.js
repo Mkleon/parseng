@@ -16,7 +16,7 @@ const config = {
 
 const getFile = (url) => axios({ url, responseType: 'stream' });
 
-const getData = async (links) => {
+const getData = (links) => {
   const promises = links.map((link) => getFile(link));
 
   return Promise.allSettled(promises)
