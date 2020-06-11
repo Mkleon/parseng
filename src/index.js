@@ -14,18 +14,18 @@ const config = {
   targetDirectory: './data/mp3/',
 };
 
-async function getFile(url) {
+const getFile = async (url) => {
   return axios({ url, responseType: 'stream' });
-}
+};
 
-async function getData(links) {
+const getData = async (links) => {
   const promises = links.map((link) => getFile(link));
 
   return Promise.allSettled(promises)
     .then((results) => results.filter(({ status }) => status === 'fulfilled'));
-}
+};
 
-async function downloadFiles(state) {
+const downloadFiles = async (state) => {
   const { counter } = state.download;
 
   const links = state.newWords
@@ -53,9 +53,9 @@ async function downloadFiles(state) {
       console.log(filePath);
     }
   });
-}
+};
 
-async function run() {
+const run = async () => {
   const state = {
     download: {
       counter: {},
@@ -75,6 +75,6 @@ async function run() {
   }
 
   downloadFiles(state);
-}
+};
 
 export default run;
