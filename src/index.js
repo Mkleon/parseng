@@ -14,9 +14,7 @@ const config = {
   targetDirectory: './data/mp3/',
 };
 
-const getFile = async (url) => {
-  return axios({ url, responseType: 'stream' });
-};
+const getFile = (url) => axios({ url, responseType: 'stream' });
 
 const getData = async (links) => {
   const promises = links.map((link) => getFile(link));
