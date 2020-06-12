@@ -14,10 +14,8 @@ const config = {
   targetDirectory: './data/mp3/',
 };
 
-const getFile = (url) => axios({ url, responseType: 'stream' });
-
-const getData = (links) => {
-  const promises = links.map((link) => getFile(link));
+const getData = (urls) => {
+  const promises = urls.map((url) => axios({ url, responseType: 'stream' }));
 
   return Promise.allSettled(promises)
     .then((results) => results.filter(({ status }) => status === 'fulfilled'));
@@ -28,7 +26,6 @@ const downloadFiles = async (state) => {
 
   const links = state.newWords
     .map((word) => word.replace(' ', '%20'))
-    .filter((word) => !state.dictionary.has(word))
     .map((word) => (
       config.resources.map((resource) => `${resource}${word}.mp3`)
     ))
@@ -53,11 +50,31 @@ const downloadFiles = async (state) => {
   });
 };
 
+const getTranslate = async (state) => {
+  const { newWords, translate } = state;
+  const links = newWords
+    .map((word) => {
+      return { dirCode: 'en-ru', template: 'General', text: `${word}`, lang: 'ru', limit: '3000', useAutoDetect: true, key: '123', ts: 'MainSite', tid: '', IsMobile: false }
+    })
+    .map((obj) => axios.post('https://www.translate.ru/services/soap.asmx/GetTranslation', obj));
+
+  const translateWords = await Promise.allSettled(links)
+    .then((results) => results.filter(({ status }) => status === 'fulfilled'));
+
+    translateWords.forEach(({ value: response }) => {
+      if (response.status === 200) {
+        console.log(response.data.d.formSeek);
+        console.log(response.data.d.result);
+      }
+    });
+};
+
 const run = async () => {
   const state = {
     download: {
       counter: {},
     },
+    translate: new Map(),
   };
 
   try {
@@ -67,12 +84,17 @@ const run = async () => {
     ]);
 
     state.dictionary = new Set(data1.split('\n'));
-    state.newWords = data2.split('\n').map((word) => word.trim());
+    state.newWords = data2
+      .split('\n')
+      .map((word) => word.trim())
+      .filter((word) => !state.dictionary.has(word));
   } catch (err) {
     console.log(err.message);
   }
 
-  downloadFiles(state);
+  // downloadFiles(state);
+
+  getTranslate(state);
 };
 
 export default run;
