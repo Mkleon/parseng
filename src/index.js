@@ -1,3 +1,4 @@
+/* eslint-disable max-len */
 import fs from 'fs';
 import axios from 'axios';
 import path from 'path';
@@ -13,6 +14,7 @@ const config = {
   dictionaryPath: path.resolve('./data/dictionaries', 'dictionary_en.txt'),
   newWordsPath: path.resolve('./data', 'new_words.txt'),
   targetDirectory: './data/mp3/',
+  translatedWords: path.resolve('./data', 'translated_words.csv'),
 };
 
 const getData = (urls) => {
@@ -80,11 +82,50 @@ const getTranslate = async (state) => {
       const dom = new JSDOM(response.data.d.result);
       const rus = dom.window.document.querySelector('[class="sourceTxt"]').textContent;
 
-      translate[response.data.d.formSeek] = rus;
+      translate.set(response.data.d.formSeek, rus);
     }
   });
+};
 
-  console.log(translate);
+
+/* "Bulk Add" is a function in Memrise.com
+Quickly add lots of words by pasting in from a spreadsheet or CSV file. Words should be one per line - blank lines will be ignored. There is a limit of 1000
+Only text columns will be added to, therefore each line should contain: English, Russian, Pronunciation, Part of Speech, Gender. Any missing fields will be blank.
+*/
+const saveTranslateToFileForMemrise = async (state) => {
+  const { translate } = state;
+  const words = [];
+
+  translate.forEach((value, key) => {
+    words.push(`${key}\t${value}`);
+  });
+
+  await fs.promises.writeFile(config.translatedWords, words.join('\n'), 'utf8');
+};
+
+
+const addWordsToMemrise = async (state) => {
+  const { translate } = state;
+  const urlMemrise = 'https://www.memrise.com/ajax/level/thing/add/';
+
+  const links = [];
+
+  translate.forEach((value, key) => {
+    links.push({
+      columns: {
+        1: key.replace(/\s/gi, '+'),
+        2: value.replace(/\s/gi, '+'),
+      },
+      level_id: 12647091,
+    });
+  });
+
+  links.map((obj) => axios.post(urlMemrise, obj));
+
+  const addedWords = await Promise.allSettled(links)
+    .then((results) => results.filter(({ status }) => status === 'fulfilled'));
+
+  console.log(addedWords);
 };
 
 const run = async () => {
@@ -112,6 +153,8 @@ const run = async () => {
 
   await downloadFiles(state);
   await getTranslate(state);
+  // await addWordsToMemrise(state);
+  await saveTranslateToFileForMemrise(state);
 };
 
 export default run;
