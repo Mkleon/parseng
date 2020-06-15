@@ -96,6 +96,7 @@ const saveTranslateToFileForMemrise = async (state) => {
   const { translate } = state;
   const words = [];
 
+  // In this release each line contains "English, Russian" only.
   translate.forEach((value, key) => {
     words.push(`${key}\t${value}`);
   });
