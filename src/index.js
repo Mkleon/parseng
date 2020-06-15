@@ -1,6 +1,7 @@
 import fs from 'fs';
 import axios from 'axios';
 import path from 'path';
+import jsdom from 'jsdom';
 
 const config = {
   resources: [
@@ -53,20 +54,37 @@ const downloadFiles = async (state) => {
 const getTranslate = async (state) => {
   const { newWords, translate } = state;
   const links = newWords
-    .map((word) => {
-      return { dirCode: 'en-ru', template: 'General', text: `${word}`, lang: 'ru', limit: '3000', useAutoDetect: true, key: '123', ts: 'MainSite', tid: '', IsMobile: false }
-    })
+    .map((word) => (
+      {
+        dirCode: 'en-ru',
+        template: 'General',
+        text: `${word}`,
+        lang: 'ru',
+        limit: '3000',
+        useAutoDetect: true,
+        key: '123',
+        ts: 'MainSite',
+        tid: '',
+        IsMobile: false,
+      }
+    ))
     .map((obj) => axios.post('https://www.translate.ru/services/soap.asmx/GetTranslation', obj));
 
   const translateWords = await Promise.allSettled(links)
     .then((results) => results.filter(({ status }) => status === 'fulfilled'));
 
-    translateWords.forEach(({ value: response }) => {
-      if (response.status === 200) {
-        console.log(response.data.d.formSeek);
-        console.log(response.data.d.result);
-      }
-    });
+  translateWords.forEach(({ value: response }) => {
+    if (response.status === 200) {
+      const { JSDOM } = jsdom;
+
+      const dom = new JSDOM(response.data.d.result);
+      const rus = dom.window.document.querySelector('[class="sourceTxt"]').textContent;
+
+      translate[response.data.d.formSeek] = rus;
+    }
+  });
+
+  console.log(translate);
 };
 
 const run = async () => {
@@ -92,9 +110,8 @@ const run = async () => {
     console.log(err.message);
   }
 
-  // downloadFiles(state);
-
-  getTranslate(state);
+  await downloadFiles(state);
+  await getTranslate(state);
 };
 
 export default run;
