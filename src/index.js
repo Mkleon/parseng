@@ -1,9 +1,9 @@
 /* eslint-disable max-len */
 import fs from 'fs';
 import axios from 'axios';
-import path from 'path';
+import path, { resolve } from 'path';
 import jsdom from 'jsdom';
-import _, { chunk } from 'lodash';
+import _, { reject } from 'lodash';
 import util from 'util';
 
 const config = {
@@ -71,6 +71,7 @@ const getTranslations = async (state) => {
     tid: '',
     IsMobile: false,
   });
+
   let translations = [];
   const parts = _.chunk(state.newWords, 10);
 
@@ -94,12 +95,11 @@ const getTranslations = async (state) => {
       const dom = new JSDOM(response.data.d.result);
       const rus = dom.window.document.querySelector('[class="sourceTxt"]').textContent;
 
-      state.translate.set(response.data.d.formSeek, rus);
+      state.translation.set(response.data.d.formSeek, rus);
     }
   });
-  console.log(`Translated ${state.translate.size} words from ${state.newWords.length}`);
+  console.log(`Translated ${state.translation.size} words from ${state.newWords.length}`);
 };
-
 
 /* "Bulk Add" is a function in Memrise.com
 Quickly add lots of words by pasting in from a spreadsheet or CSV file. Words should be one per line - blank lines will be ignored. There is a limit of 1000
@@ -108,8 +108,8 @@ Only text columns will be added to, therefore each line should contain: English,
 const saveTranslateToFileForMemrise = async (state) => {
   const words = [];
 
-  // In this release each line contains "English, Russian" only.
-  state.translate.forEach((value, key) => {
+  // In this release each line contains "English  Russian" only.
+  state.translation.forEach((value, key) => {
     words.push(`${key}\t${value}`);
   });
 
@@ -117,12 +117,11 @@ const saveTranslateToFileForMemrise = async (state) => {
 };
 
 const addWordsToMemrise = async (state) => {
-  const { translate } = state;
   const urlMemrise = 'https://www.memrise.com/ajax/level/thing/add/';
 
   const links = [];
 
-  translate.forEach((value, key) => {
+  state.translation.forEach((value, key) => {
     links.push({
       columns: {
         1: key.replace(/\s/gi, '+'),
@@ -140,38 +139,55 @@ const addWordsToMemrise = async (state) => {
   console.log(addedWords);
 };
 
-const run = async () => {
+const getDictionaryData = async (source) => {
+  const data = await fs.promises.readFile(source, 'utf8');
+
+  return data.split('\n').filter((word) => word.length > 0);
+};
+
+const getNewWordsData = async (source, dictionary) => {
+  const data = await fs.promises.readFile(source, 'utf8');
+
+  return data.split('\n')
+    .map((word) => word.trim())
+    .filter((word) => word.length > 0)
+    .filter((word) => !dictionary.has(word));
+};
+
+export default async () => {
   const state = {
     download: {
       counter: {},
     },
-    translate: new Map(),
+    dictionary: new Set(),
+    newWords: [],
+    translation: new Map(),
   };
 
   try {
-    const [data1, data2] = await Promise.all([
-      fs.promises.readFile(config.dictionaryPath, 'utf8'),
-      fs.promises.readFile(config.newWordsPath, 'utf8'),
-    ]);
+    const data1 = await getDictionaryData(config.dictionaryPath);
+    data1.forEach((word) => {
+      state.dictionary.add(word);
+    });
 
-    state.dictionary = new Set(data1.split('\n'));
-    state.newWords = data2
-      .split('\n')
-      .map((word) => word.trim())
-      .filter((word) => !state.dictionary.has(word));
+    // TODO: непонятно почему только 29 слов считывается из 35
+    const data2 = await getNewWordsData(config.newWordsPath, state.dictionary);
+    state.newWords = state.newWords.concat(data2);
+
+    if (state.newWords.length === 0) {
+      console.log('New words not found.');
+      return reject(new Error('New words not found.'));
+    }
+
+    await getTranslations(state);
+    await saveTranslateToFileForMemrise(state);
+    // await downloadFiles(state);
+    // await addWordsToMemrise(state);
+
+    console.log('Done!');
   } catch (err) {
     console.log(err.message);
   }
 
-  // await downloadFiles(state);
-  try {
-    await getTranslations(state);
-  } catch (e) {
-    console.log(e.message);
-  }
-
-  // await addWordsToMemrise(state);
-  await saveTranslateToFileForMemrise(state);
+  return 'Finished!';
 };
-
-export default run;
