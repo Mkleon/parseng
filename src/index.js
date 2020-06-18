@@ -3,6 +3,8 @@ import fs from 'fs';
 import axios from 'axios';
 import path from 'path';
 import jsdom from 'jsdom';
+import _, { chunk } from 'lodash';
+import util from 'util';
 
 const config = {
   resources: [
@@ -53,38 +55,49 @@ const downloadFiles = async (state) => {
   });
 };
 
-const getTranslate = async (state) => {
-  const { newWords, translate } = state;
-  const links = newWords
-    .map((word) => (
-      {
-        dirCode: 'en-ru',
-        template: 'General',
-        text: `${word}`,
-        lang: 'ru',
-        limit: '3000',
-        useAutoDetect: true,
-        key: '123',
-        ts: 'MainSite',
-        tid: '',
-        IsMobile: false,
-      }
-    ))
-    .map((obj) => axios.post('https://www.translate.ru/services/soap.asmx/GetTranslation', obj));
+const setTimeoutPromise = util.promisify(setTimeout);
 
-  const translateWords = await Promise.allSettled(links)
-    .then((results) => results.filter(({ status }) => status === 'fulfilled'));
+const getTranslations = async (state) => {
+  const url = 'https://www.translate.ru/services/soap.asmx/GetTranslation';
+  const options = (text) => ({
+    dirCode: 'en-ru',
+    template: 'General',
+    text: `${text}`,
+    lang: 'ru',
+    limit: '3000',
+    useAutoDetect: false,
+    key: '123',
+    ts: 'MainSite',
+    tid: '',
+    IsMobile: false,
+  });
+  let translations = [];
+  const parts = _.chunk(state.newWords, 10);
 
-  translateWords.forEach(({ value: response }) => {
+  // eslint-disable-next-line no-restricted-syntax
+  for await (const part of parts) {
+    const links = part.map((word) => axios.post(url, options(word)));
+
+    const res = await Promise.allSettled(links)
+      .then((results) => results.filter(({ status }) => status === 'fulfilled'))
+      .catch((err) => new Error(err));
+
+    translations = [...translations, ...res];
+
+    await setTimeoutPromise(5000, console.log(`Sent ${translations.length} queries from ${state.newWords.length}.`));
+  }
+
+  translations.flat().forEach(({ value: response }) => {
     if (response.status === 200) {
       const { JSDOM } = jsdom;
 
       const dom = new JSDOM(response.data.d.result);
       const rus = dom.window.document.querySelector('[class="sourceTxt"]').textContent;
 
-      translate.set(response.data.d.formSeek, rus);
+      state.translate.set(response.data.d.formSeek, rus);
     }
   });
+  console.log(`Translated ${state.translate.size} words from ${state.newWords.length}`);
 };
 
 
@@ -93,17 +106,15 @@ Quickly add lots of words by pasting in from a spreadsheet or CSV file. Words sh
 Only text columns will be added to, therefore each line should contain: English, Russian, Pronunciation, Part of Speech, Gender. Any missing fields will be blank.
 */
 const saveTranslateToFileForMemrise = async (state) => {
-  const { translate } = state;
   const words = [];
 
   // In this release each line contains "English, Russian" only.
-  translate.forEach((value, key) => {
+  state.translate.forEach((value, key) => {
     words.push(`${key}\t${value}`);
   });
 
   await fs.promises.writeFile(config.translatedWords, words.join('\n'), 'utf8');
 };
-
 
 const addWordsToMemrise = async (state) => {
   const { translate } = state;
@@ -152,8 +163,13 @@ const run = async () => {
     console.log(err.message);
   }
 
-  await downloadFiles(state);
-  await getTranslate(state);
+  // await downloadFiles(state);
+  try {
+    await getTranslations(state);
+  } catch (e) {
+    console.log(e.message);
+  }
+
   // await addWordsToMemrise(state);
   await saveTranslateToFileForMemrise(state);
 };
