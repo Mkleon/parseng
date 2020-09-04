@@ -43,8 +43,9 @@ const setTimeoutPromise = util.promisify(setTimeout);
 const getWord = (response) => {
   const { JSDOM } = jsdom;
   const dom = new JSDOM(response.data.d.result);
+  const result = dom.window.document.querySelector('[class="sourceTxt"]');
 
-  return dom.window.document.querySelector('[class="sourceTxt"]').textContent;
+  return result === null ? 'not found' : result.textContent;
 };
 
 const getTranslations = async (state) => {
@@ -78,12 +79,16 @@ const getTranslations = async (state) => {
     await setTimeoutPromise(5000);
   }
 
-  translations.flat().forEach(({ value: response }) => {
-    if (response.status === 200) {
-      const rus = getWord(response);
+  translations.flat().forEach(({ value }) => {
+    const { data } = value.config;
 
-      state.translation.set(response.data.d.formSeek, rus);
-      state.translatedWords.push(response.data.d.formSeek);
+    if (value.status === 200) {
+      const eng = JSON.parse(data).text;
+
+      const responseData = value.data.d;
+      const rus = responseData.formSeek === '' ? responseData.result : getWord(value);
+
+      state.translation.set(eng, rus);
     }
   });
 };
@@ -148,7 +153,6 @@ export default async (config) => {
     dictionary: new Set(),
     newWords: [],
     translation: new Map(),
-    translatedWords: [],
   };
 
   const dictionaryPath = path.resolve(config.dictionaryPath);
