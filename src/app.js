@@ -40,12 +40,11 @@ const downloadFiles = async (state, targetDirectory, resources) => {
 
 const setTimeoutPromise = util.promisify(setTimeout);
 
-const getWord = (response) => {
+const getRusWord = (response) => {
   const { JSDOM } = jsdom;
   const dom = new JSDOM(response.data.d.result);
-  const result = dom.window.document.querySelector('[class="sourceTxt"]');
 
-  return result === null ? 'not found' : result.textContent;
+  return dom.window.document.querySelector('[class="sourceTxt"]').textContent;
 };
 
 const getTranslations = async (state) => {
@@ -79,18 +78,21 @@ const getTranslations = async (state) => {
     await setTimeoutPromise(5000);
   }
 
-  translations.flat().forEach(({ value }) => {
-    const { data } = value.config;
+  let result = [];
 
+  translations.flat().forEach(({ value }) => {
     if (value.status === 200) {
+      const { data } = value.config;
       const eng = JSON.parse(data).text;
 
       const responseData = value.data.d;
-      const rus = responseData.formSeek === '' ? responseData.result : getWord(value);
+      const rus = responseData.formSeek === '' ? responseData.result : getRusWord(value);
 
-      state.translation.set(eng, rus);
+      result = [...result, [eng, rus]];
     }
   });
+
+  return result;
 };
 
 /* "Bulk Add" is a function in Memrise.com
@@ -129,15 +131,7 @@ const saveTranslationsToCsvFile = async (state, translatedWordsPath) => {
     .then((results) => results.filter(({ status }) => status === 'fulfilled'));
 }; */
 
-const getDictionaryData = async (source) => {
-  const data = await fs.promises.readFile(source, 'utf8');
-
-  return data.split('\n')
-    .map((word) => word.trim())
-    .filter((word) => word.length > 0);
-};
-
-const getNewWordsData = async (source) => {
+const getDataFromFile = async (source) => {
   const data = await fs.promises.readFile(source, 'utf8');
 
   return data.split('\n')
@@ -161,13 +155,13 @@ export default async (config) => {
   const { targetDirectory, resources } = config;
 
   try {
-    const data1 = await getDictionaryData(dictionaryPath);
+    const data1 = await getDataFromFile(dictionaryPath);
     data1.forEach((word) => {
       state.dictionary.add(word);
     });
 
     // TODO: непонятно почему только 29 слов считывается из 35
-    const dirtyList = await getNewWordsData(newWordsPath);
+    const dirtyList = await getDataFromFile(newWordsPath);
     const duplicates = dirtyList.filter((word) => state.dictionary.has(word));
     const cleanedList = dirtyList.filter((word) => !state.dictionary.has(word));
     state.newWords = state.newWords.concat(cleanedList);
@@ -182,7 +176,13 @@ export default async (config) => {
 
     console.log(`New words (${state.newWords.length}):\n${state.newWords.map((word) => `  - ${word}`).join('\n')}\n`);
 
-    await getTranslations(state);
+    const translations = await getTranslations(state);
+    translations.forEach(([eng, rus]) => {
+      state.translation.set(eng, rus);
+    });
+
+    console.log(`Found translations (${translations.length}):\n${translations.map(([eng, rus]) => `   ${eng} - ${rus}`).join('\n')}`);
+
     await saveTranslationsToCsvFile(state, translatedWordsPath);
     await downloadFiles(state, targetDirectory, resources);
     // await addWordsToMemrise(state);
