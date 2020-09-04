@@ -40,7 +40,7 @@ const downloadFiles = async (state, targetDirectory, resources) => {
 
 const setTimeoutPromise = util.promisify(setTimeout);
 
-const getRusWord = (response) => {
+const getRussianWord = (response) => {
   const { JSDOM } = jsdom;
   const dom = new JSDOM(response.data.d.result);
 
@@ -86,7 +86,7 @@ const getTranslations = async (state) => {
       const eng = JSON.parse(data).text;
 
       const responseData = value.data.d;
-      const rus = responseData.formSeek === '' ? responseData.result : getRusWord(value);
+      const rus = responseData.formSeek === '' ? responseData.result : getRussianWord(value);
 
       result = [...result, [eng, rus]];
     }
@@ -183,13 +183,15 @@ export default async (config) => {
 
     console.log(`Found translations (${translations.length}):\n${translations.map(([eng, rus]) => `   ${eng} - ${rus}`).join('\n')}`);
 
-    await saveTranslationsToCsvFile(state, translatedWordsPath);
+    saveTranslationsToCsvFile(state, translatedWordsPath);
+    console.log(`\nWords list have saved to csv file ${translatedWordsPath}.`);
+
     await downloadFiles(state, targetDirectory, resources);
+    console.log(`All sound files have saved to directory ${path.resolve(targetDirectory)}.`);
+
     // await addWordsToMemrise(state);
 
     // TODO: в конце нужно добавлять новые слова в словарь
-    console.log('All done!');
-
     // TODO: Очищать список переведенных слов
   } catch (err) {
     console.log(err.message);
