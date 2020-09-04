@@ -103,7 +103,7 @@ const saveTranslationsToCsvFile = async (state, translatedWordsPath) => {
   await fs.promises.writeFile(translatedWordsPath, words.join('\n'), 'utf8');
 };
 
-const addWordsToMemrise = async (state) => {
+/* const addWordsToMemrise = async (state) => {
   const urlMemrise = 'https://www.memrise.com/ajax/level/thing/add/';
 
   const links = [];
@@ -122,26 +122,22 @@ const addWordsToMemrise = async (state) => {
 
   const addedWords = await Promise.allSettled(links)
     .then((results) => results.filter(({ status }) => status === 'fulfilled'));
-
-};
-
-const addTranslatedWordsToDictionary = async (state) => {
-
-};
+}; */
 
 const getDictionaryData = async (source) => {
   const data = await fs.promises.readFile(source, 'utf8');
 
-  return data.split('\n').filter((word) => word.length > 0);
+  return data.split('\n')
+    .map((word) => word.trim())
+    .filter((word) => word.length > 0);
 };
 
-const getNewWordsData = async (source, dictionary) => {
+const getNewWordsData = async (source) => {
   const data = await fs.promises.readFile(source, 'utf8');
 
   return data.split('\n')
     .map((word) => word.trim())
-    .filter((word) => word.length > 0)
-    .filter((word) => !dictionary.has(word));
+    .filter((word) => word.length > 0);
 };
 
 export default async (config) => {
@@ -167,27 +163,30 @@ export default async (config) => {
     });
 
     // TODO: непонятно почему только 29 слов считывается из 35
-    const data2 = await getNewWordsData(newWordsPath, state.dictionary);
-    state.newWords = state.newWords.concat(data2);
+    const dirtyList = await getNewWordsData(newWordsPath);
+    const duplicates = dirtyList.filter((word) => state.dictionary.has(word));
+    const cleanedList = dirtyList.filter((word) => !state.dictionary.has(word));
+    state.newWords = state.newWords.concat(cleanedList);
+
+    if (duplicates.length > 0) {
+      console.log(`These words are already in the dictionary (${duplicates.length} duplicates):\n${duplicates.map((word) => `  - ${word}`).join('\n')}\n`);
+    }
 
     if (state.newWords.length === 0) {
       throw Error('New words not found.');
     }
+
+    console.log(`New words (${state.newWords.length}):\n${state.newWords.map((word) => `  - ${word}`).join('\n')}\n`);
 
     await getTranslations(state);
     await saveTranslationsToCsvFile(state, translatedWordsPath);
     await downloadFiles(state, targetDirectory, resources);
     // await addWordsToMemrise(state);
 
-    try {
-      await addTranslatedWordsToDictionary(state, dictionaryPath);
-      // state.newWords.length = 0;
-    } catch (err) {
-      console.log(err.message);
-    }
-
     // TODO: в конце нужно добавлять новые слова в словарь
     console.log('All done!');
+
+    // TODO: Очищать список переведенных слов
   } catch (err) {
     console.log(err.message);
   }
