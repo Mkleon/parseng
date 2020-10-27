@@ -1,5 +1,9 @@
-import app from './app';
+import { app, checkDuplicate } from './app';
 
-export default (config) => {
+export const parse = (config) => {
   app(config);
+};
+
+export const check = (config) => {
+  checkDuplicate(config);
 };

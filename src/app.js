@@ -139,7 +139,7 @@ const getDataFromFile = async (source) => {
     .filter((word) => word.length > 0);
 };
 
-export default async (config) => {
+export const app = async (config) => {
   const state = {
     download: {
       counter: {},
@@ -198,4 +198,31 @@ export default async (config) => {
   }
 
   return 'Finished!';
+};
+
+export const checkDuplicate = async (config) => {
+  const dictionaryPath = path.resolve(config.dictionaryPath);
+  const newWordsPath = path.resolve(config.newWordsPath);
+
+  try {
+    const data1 = await getDataFromFile(dictionaryPath);
+    const dictionary = new Set();
+
+    data1.forEach((word) => {
+      dictionary.add(word);
+    });
+
+    const dirtyList = await getDataFromFile(newWordsPath);
+    const duplicates = dirtyList.filter((word) => dictionary.has(word));
+    const cleanedList = dirtyList.filter((word) => !dictionary.has(word));
+
+    if (duplicates.length > 0) {
+      console.log(`These words are already in the dictionary (${duplicates.length} duplicates):\n${duplicates.map((word) => `  - ${word}`).join('\n')}\n`);
+    }
+    if (cleanedList.length > 0) {
+      console.log(`New words (${cleanedList.length}):\n${cleanedList.map((word) => `  - ${word}`).join('\n')}\n`);
+    }
+  } catch (err) {
+    console.log(err.message);
+  }
 };

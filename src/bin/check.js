@@ -1,13 +1,13 @@
 #!/usr/bin/env node
 
 import commander from 'commander';
-import { parse } from '..';
+import { check } from '..';
 import config from '../../config';
 
 const program = new commander.Command();
 
 program
-  .name('parseng')
-  .action(() => parse(config));
+  .name('check')
+  .action(() => check(config));
 
 program.parse(process.argv);
